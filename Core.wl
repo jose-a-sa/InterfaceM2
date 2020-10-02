@@ -84,7 +84,7 @@ supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
   ];
 
 
-parseLine[out_String] :=
+parseLineM2[out_String] :=
   Module[{RP},
     RP = ReplaceAll[{
       s_String?(StringMatchQ[$superSubOutPatt]) :> 
@@ -115,7 +115,7 @@ EvaluateM2[cmd_String] :=
     ];
     StringDelete[str, "\n\ni" ~~ (DigitCharacter ..) ~~ " : "] // 
       If[$PrintRawM2, Echo, Identity] // 
-      parseLine // 
+      parseLineM2 // 
       If[$PrintDebugM2, Echo, Identity]
   ];
 SetAttributes[EvaluateM2, {Protected, ReadProtected}];

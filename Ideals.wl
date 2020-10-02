@@ -46,8 +46,8 @@ IdealPrimaryDecomposition[
 			polyVarsStr[ nV, "A"],
 			"; "
 		];
-		idealStr = StringReplace[ToString[i, InputForm], 
-			Join[ Union[vars, params], 
+		idealStr = StringReplace[ToString[ideal, InputForm], 
+			Join[ ReverseSortBy[First]@Union[vars, params], 
 				{ "}" -> ")", "{" -> "ideal(" } 
 			]
 		];
@@ -56,7 +56,7 @@ IdealPrimaryDecomposition[
       "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
 		];
 		ToExpression@StringReplace[outStr, Join[ 
-				Map[Reverse]@Union[vars, params], 
+				ReverseSortBy[First]@Map[Reverse]@Union[vars, params], 
 				{ "(" -> "[", ")" -> "]", "ideal" -> "List"} 
 			]
 		]
@@ -68,7 +68,7 @@ SyntaxInformation[IdealRadical] = {"ArgumentsPattern" -> {_, _}};
 IdealRadical[
 		i : (And|List)[__],
   	v : ({__} | _)] :=
-	Module[{ideal, vars, nV, params, nP, idealStr, ringStr, outStr},
+	Module[{ideal, vars, rp, nV, params, nP, idealStr, ringStr, outStr},
 		ideal = List @@ Map[If[MatchQ[#, _Equal], Subtract@@#, #]&]@i;
   	vars = MapIndexed[
 			ToString[#1, InputForm] -> "A_"<>ToString[First@#2] &,
@@ -86,8 +86,8 @@ IdealRadical[
 			polyVarsStr[ nV, "A"],
 			"; "
 		];
-		idealStr = StringReplace[ToString[i, InputForm], 
-			Join[ Union[vars, params], 
+		idealStr = StringReplace[ToString[ideal, InputForm], 
+			Join[ ReverseSortBy[First]@Union[vars, params], 
 				{ "}" -> ")", "{" -> "ideal(" } 
 			]
 		];
@@ -96,7 +96,7 @@ IdealRadical[
       "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
 		];
 		ToExpression@StringReplace[outStr, Join[ 
-				Map[Reverse]@Union[vars, params], 
+				ReverseSortBy[First]@Map[Reverse]@Union[vars, params], 
 				{ "(" -> "[", ")" -> "]", "ideal" -> "List"} 
 			]
 		]
