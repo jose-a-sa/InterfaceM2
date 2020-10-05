@@ -14,6 +14,7 @@ KillM2::usage = "";
 $PrintRawM2 = False;
 $PrintDebugM2 = False;
 $EvaluationTimeOverflowM2 = 20;
+$InitializeTimeOverflowM2 = 5;
 
 
 Begin["`Private`"]
@@ -34,9 +35,16 @@ $subOutPatt = $outLinePatt ~~ "\n" ~~ $subLinePatt;
 $superOutPatt =  $superLinePatt ~~ "\n" ~~ $outLinePatt;
 
 
+
+InitializeM2::nspec = "M2 process location was never specified. \
+Please introduce it as the argument.";
+InitializeM2::tmovrflw = 
+"Initialization time surpassed. Please verify if Macaulay2 is working properly. \
+Modify $InitializeTimeOverflowM2 to override the default value.";
+
 SyntaxInformation[InitializeM2] = {"ArgumentsPattern" -> {_.}};
 InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] := 
-  Module[{str = "", buf = "", m2},
+  Module[{str = "", buf = "", m2, timeStep = 0.01, i = 1},
     If[proc === Automatic,
       If[$processM2 === Automatic, 
         Message[InitializeM2::nspec]; Return[Null]
@@ -47,13 +55,15 @@ InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] :=
     While[!StringMatchQ[buf = ReadString[m2, EndOfBuffer], 
         ___ ~~ "\ni" ~~ (DigitCharacter ..) ~~ " : "],
       str = StringJoin[str, buf];
-      Pause[0.01];
+      Pause[timeStep];
+      If[timeStep * (i++) > $InitializeTimeOverflowM2,
+        Message[InitializeM2::tmovrflw, $InitializeTimeOverflowM2];
+        KillM2[]; Return[$Failed];    
+      ];
     ];
     M2 = m2
   ];
 SetAttributes[InitializeM2, {Protected, ReadProtected}];
-InitializeM2::nspec = "M2 process location was never specified. \
-Please introduce it as the argument.";
 
 
 supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
@@ -64,11 +74,9 @@ supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
     both = (If[# === {}, {{}, {}}, Transpose@#] &)@Position[
       Outer[Equal[First@#1, First@#2] &, posSub, posSuper, 1, 1], True];
     assoc = Join[
-      MapThread[
-        First@MaximalBy[{#1, #2}, Last] -> StringJoin["_", StringTake[subStr, #1],
-          "^", StringTake[superStr, #2], "*"] &, 
-        {posSub[[First@both]], posSuper[[Last@both]]}
-      ],
+      MapThread[First@MaximalBy[{#1, #2}, Last] -> StringJoin["_", 
+          StringTake[subStr, #1], "^", StringTake[superStr, #2], "*"] &, 
+        {posSub[[First@both]], posSuper[[Last@both]]} ],
       Table[ p -> StringJoin["_", StringTake[subStr, p], "*"],
         {p, Delete[posSub, Map[List]@First@both]} ],
       Table[ p -> StringJoin["^", StringTake[superStr, p], "*"],
@@ -79,7 +87,7 @@ supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
     StringReplace[
       StringTrim@StringReplacePart[newStr, Values@assoc, Keys@assoc],
       (n:RepeatedNull[DigitCharacter]) ~~ (s:monomialPatt) ~~ 
-        "*" ~~ (f:afterStarPatt) :> If[n == "", "", n<>"*"]<>s<>f
+        "*" ~~ (f:afterStarPatt) :> If[n == "", "", n<>"*"] <> s <> f
     ]
   ];
 
@@ -98,6 +106,10 @@ parseLineM2[out_String] :=
   ];
 
 
+EvaluateM2::tmovrflw = 
+"Evaluation time surpassed. \
+Modify $EvaluationTimeOverflowM2 to override the default value.";
+
 SyntaxInformation[EvaluateM2] = {"ArgumentsPattern" -> {_}};
 EvaluateM2[cmd_String] :=
   Module[{str = "", i=1, timeStep=0.02},
@@ -110,7 +122,7 @@ EvaluateM2[cmd_String] :=
       str = StringJoin[ str, ReadString[M2, EndOfBuffer] ];
       If[timeStep * (i++) > $EvaluationTimeOverflowM2,
         Message[EvaluateM2::tmovrflw, $EvaluationTimeOverflowM2];
-        KillM2[]; Return[Null];    
+        KillM2[]; Return[$Failed];    
       ];
     ];
     StringDelete[str, "\n\ni" ~~ (DigitCharacter ..) ~~ " : "] // 
@@ -119,16 +131,15 @@ EvaluateM2[cmd_String] :=
       If[$PrintDebugM2, Echo, Identity]
   ];
 SetAttributes[EvaluateM2, {Protected, ReadProtected}];
-EvaluateM2::tmovrflw = 
-"The evaluation time surpassed the maximum of `1` seconds. \
-Modify $EvaluationTimeOverflowM2 to override the default value.";
 
 
 SyntaxInformation[RestartM2] = {"ArgumentsPattern" -> {}};
 RestartM2[] := 
   Module[{},
-    EvaluateM2["restart;"];
-    Return[Null];
+    If[ FailureQ@EvaluateM2["restart;"],
+      Return[Null],
+      Return[$Failed]
+    ];
   ];
 SetAttributes[RestartM2, {Protected, ReadProtected}];
 

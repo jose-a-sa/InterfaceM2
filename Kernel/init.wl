@@ -9,6 +9,9 @@ on how to setup M2 on your desired distro.";
 InterfaceM2::munixm2 = "Missing Macaulay2 binary. \
 Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
 on how to setup M2 on your desired distro.";
+InterfaceM2::m2fld = "Missing Macaulay2 binary. \
+Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
+on how to setup M2 on your desired distro.";
 
 loadInterfaceM2[] := 
   Module[{cmdCheck, windowCheck, unixCheck, load},
@@ -44,14 +47,17 @@ loadInterfaceM2[] :=
       ];
       Return[False];
     ];
-    unixCheck[] := Module[{whichM2},
+    unixCheck[] := Module[{whichM2, helpM2},
       whichM2 = cmdCheck[{"which", "M2"},
         "StandardOutput" -> StringContainsQ["M2"]
       ];
       If[whereM2, 
         $m2path = {"M2"}; Return[True], 
         Message[InterfaceM2::munixm2]; Return[False]
-      ];    
+      ];
+      (*helpM2 = cmdCheck[{"M2", "--help"},
+        "StandardOutput" -> StringContainsQ["M2"]
+      ];*)
       Return[False];
     ];
 
@@ -62,8 +68,8 @@ loadInterfaceM2[] :=
       ],
       InterfaceM2`Core`KillM2[];
       Get["InterfaceM2`Core`"];
-      InterfaceM2`Core`InitializeM2[$m2path];
       Get["InterfaceM2`Ideals`"];
+      InterfaceM2`Core`InitializeM2[$m2path];
     ];
   ];
 
