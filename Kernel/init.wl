@@ -14,7 +14,7 @@ Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
 on how to setup M2 on your desired distro.";
 
 loadInterfaceM2[] := 
-  Module[{cmdCheck, windowCheck, unixCheck, load},
+  Module[{cmdCheck, windowsCheck, unixCheck},
     cmdCheck[cmd : (_String | {__String}), 
         tests : (_List | _Association | _Rule) : {}] :=
       Module[{proc},
@@ -47,7 +47,7 @@ loadInterfaceM2[] :=
       ];
       Return[False];
     ];
-    unixCheck[] := Module[{whichM2, helpM2},
+    unixCheck[] := Module[{whichM2},
       whichM2 = cmdCheck[{"which", "M2"},
         "StandardOutput" -> StringContainsQ["M2"]
       ];
