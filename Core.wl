@@ -14,8 +14,8 @@ KillM2::usage = "";
 
 $PrintRawM2 = False;
 $PrintDebugM2 = False;
-$EvaluationTimeOverflowM2 = 20;
-$InitializeTimeOverflowM2 = 5;
+$EvaluationTimeOverflowM2 = 60;
+$InitializeTimeOverflowM2 = 10;
 
 
 Begin["`Private`"]

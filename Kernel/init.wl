@@ -51,7 +51,7 @@ loadInterfaceM2[] :=
       whichM2 = cmdCheck[{"which", "M2"},
         "StandardOutput" -> StringContainsQ["M2"]
       ];
-      If[whereM2, 
+      If[whichM2, 
         $m2path = {"M2"}; Return[True], 
         Message[InterfaceM2::munixm2]; Return[False]
       ];
