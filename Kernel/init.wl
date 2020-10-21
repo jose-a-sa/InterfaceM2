@@ -49,7 +49,8 @@ loadInterfaceM2[] :=
     ];
     unixCheck[] := Module[{whichM2},
       whichM2 = cmdCheck[{"which", "M2"},
-        "StandardOutput" -> StringContainsQ["M2"]
+        "StandardOutput" -> 
+          Not@*StringContainsQ["not found"]
       ];
       If[whichM2, 
         $m2path = {"M2"}; Return[True], 
@@ -60,7 +61,6 @@ loadInterfaceM2[] :=
       ];*)
       Return[False];
     ];
-
     If[
       Switch[$OperatingSystem,
         "Windows", windowsCheck[],
