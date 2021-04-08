@@ -8,13 +8,13 @@ ClearAll["InterfaceM2`Core`*"];
 InitializeM2::usage = "";
 EvaluateM2::usage = "";
 SessionHistoryM2::usage = "";
+RawSessionHistoryM2::usage = "";
 RestartM2::usage = "";
 KillM2::usage = "";
 
-
 $PrintRawM2 = False;
 $PrintDebugM2 = False;
-$EvaluationTimeOverflowM2 = 60;
+$EvaluationTimeOverflowM2 = 600;
 $InitializeTimeOverflowM2 = 10;
 
 
@@ -66,7 +66,7 @@ InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] :=
 SetAttributes[InitializeM2, {Protected, ReadProtected}];
 
 
-supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
+(* supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
   Module[{posSuper, posSub, assoc, both, newStr, monomialPatt, afterStarPatt},
     newStr = ioStr<>StringRepeat[" ", 50];
     posSuper = StringPosition[superStr, $superPatt, Overlaps -> False];
@@ -89,6 +89,40 @@ supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
       (n:RepeatedNull[DigitCharacter]) ~~ (s:monomialPatt) ~~ 
         "*" ~~ (f:afterStarPatt) :> If[n == "", "", n<>"*"] <> s <> f
     ]
+  ]; *)
+supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
+  Module[{ioLen, chars, posPattF, aF, posQQ, posSuper, posSub, posSS, finalA},
+    ioLen = Max@Map[StringLength, {superStr, ioStr, subStr}];
+    chars = Map[
+      Join[Characters@#1, Table[" ", ioLen - StringLength@#1] ] &, 
+      {superStr, ioStr, subStr}
+    ];
+    posPattF = {
+      Position[{" ", "-", Except[" "]} | {Except[" "], "-", _}],
+      Position[{_?(StringMatchQ[DigitCharacter]), " ", _}],
+      Position[{_, " ", _?(StringMatchQ[DigitCharacter])}]
+    };
+    aF = AssociationMap[
+      StringTrim[ StringJoin @@@ chars[[{1, 3}, Range @@ #1]] ] &
+    ];
+    {posQQ, posSuper, posSub} = Table[
+      MinMax /@ Split[First/@(FF@Transpose@chars), Abs[#1-#2]<=1 &],
+      {FF, posPattF}
+    ];
+    posSS = Values@Map[Apply[{Min@#1, Max@#2} &]@*Transpose]@Select[
+      GroupBy[Join[posSuper, posSub], First],
+      Length[#] > 1 &
+    ];
+    posSuper = DeleteCases[posSuper, {Alternatives @@ posSS[[All, 1]], _}];
+    posSub = DeleteCases[posSub, {Alternatives @@ posSS[[All, 1]], _}];
+    finalA = Join[
+      ("_" <> #2 <> "^" <> #1 <> "*" &) @@@ aF@posSS,
+      ("^" <> #1 <> "*" &) @@@ aF@posSuper,
+      ("_" <> #2 <> "*" &) @@@ aF@posSub,
+      ("(" <> #1 <> "/" <> #2 <> ")*" &) @@@ aF@posQQ
+    ];
+    StringReplacePart[StringJoin@chars[[2]], Values@finalA, Keys@finalA] // 
+      StringReplace[{"*" ~~ x : ("," | ")" | "}" | " +" | " -" | "[") :> x}]
   ];
 
 
@@ -100,11 +134,11 @@ parsesupersubscriptM2[midPatt_] :=
     superOutPatt = $superLinePatt ~~ "\n" ~~ midPatt;
     ReplaceAll[{
       s_String?(StringMatchQ[superSubOutPatt]) :> 
-      supersubscriptM2[ StringSplit[s, "\n"] ], 
+        supersubscriptM2[ StringSplit[s, "\n"] ], 
       s_String?(StringMatchQ[superOutPatt]) :> 
-      supersubscriptM2[ StringSplit[s, "\n"]~Join~{""} ], 
+        supersubscriptM2[ StringSplit[s, "\n"]~Join~{""} ], 
       s_String?(StringMatchQ[subOutPatt]) :> 
-      supersubscriptM2[ {""}~Join~StringSplit[s, "\n"] ]
+        supersubscriptM2[ {""}~Join~StringSplit[s, "\n"] ]
     }]
   ];
 
@@ -169,6 +203,14 @@ SessionHistoryM2[] :=
     parseLineM2@$M2String
   ];
 SetAttributes[SessionHistoryM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[RawSessionHistoryM2] = {"ArgumentsPattern" -> {}};
+RawSessionHistoryM2[] := 
+  Module[{},
+    $M2String
+  ];
+SetAttributes[RawSessionHistoryM2, {Protected, ReadProtected}];
 
 
 SyntaxInformation[RestartM2] = {"ArgumentsPattern" -> {}};

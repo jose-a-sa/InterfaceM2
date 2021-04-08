@@ -1,5 +1,6 @@
 
 BeginPackage["InterfaceM2`Ideals`", {
+    "InterfaceM2`Utils`",
     "InterfaceM2`Core`"
 }]
 
@@ -11,146 +12,264 @@ PrimaryDecompositionM2::usage = "";
 AssociatedPrimesM2::usage = "";
 RadicalM2::usage = "";
 SingularLocusM2::usage = "";
+MapKernelM2::usage = "";
+MinimalPresentationM2::usage = "";
 
 
-$BaseRingM2 = "ZZ/101";
+$BaseRingM2 = "QQ";
 
 
 Begin["`Private`"]
 
 
-toSubtractList[ expr : (List|And)[Except[_List]..] ] := 
-  Map[ Through@*If[MatchQ[_Equal], Apply[Subtract], Identity],
-    List @@ expr
+variableRules[s_String, vars_List] := 
+  MapIndexed[
+    ToString[#1, InputForm] -> s <> ToString[First@#2] &, 
+    vars
   ];
 
 
-toCommandIdealsM2[cmd_, rules_, v_List, p_List] := 
-  Module[{rp, vars, params, ideals, ringStr},
-    rp = Association[rules];
-    vars = MapIndexed[
-      ToString[#1, InputForm] -> "A"<>ToString[First@#2] &, v
+ringCommand[ambR_, vars : KeyValuePattern[{}], q_ : {}, deg_ : {}] := 
+  Module[{idealQ, varOpts, varStr, quoStr}, 
+    idealQ = StringReplace[(ToString[#, InputForm] &) /@ q, vars];
+    varOpts = If[
+      (VectorQ[deg]||MatrixQ[deg]) && First@Dimensions@deg == Length@vars > 0, 
+      {"Degrees=>" <> ToString[deg, InputForm]}, {}];
+    varStr = StringRiffle[Join[Values@vars, varOpts], {"[", ",", "]"}];
+    quoStr = If[Length@idealQ > 0, 
+      StringRiffle[idealQ, {"/(", ", ", ")"}], ""];
+    StringJoin[ambR, varStr, quoStr] // StringDelete["[]"]
+  ];
+
+
+idealsCommand[cmd_, rules_, v_List, p_List, ext_List : {}] := 
+  Module[{vars, params, nums, rls, ideals, 
+      baseRingCmd, ringCmd, idealCmd},
+    vars = variableRules["X", v];
+    params = variableRules["z", p];
+    nums = variableRules["a", ext];
+    rls = Union[vars, params, nums];
+    baseRingCmd = "KK = " <> ringCommand[$BaseRingM2, nums, 
+      MinimalPolynomial[ext, ToExpression@Values@nums] 
     ];
-    params = MapIndexed[
-      ToString[#1, InputForm] -> "m"<>ToString[First@#2] &, p
+    ringCmd = "R = " <> ringCommand[
+      ringCommand["KK", params],
+      vars
     ];
-    ringStr = StringJoin[
-      "R = ", $BaseRingM2, 
-      If[0 == Length@params, "", 
-        StringRiffle[Values@params, {"[", ",", "]"}] 
-      ],
-      StringRiffle[Values@vars, {"[", ",", "]"}],
-      "; "
+    ideals = (StringReplace[
+      ToString[#, InputForm], 
+      Join[ReverseSortBy[First]@rls, {"}" -> ")","{" -> "ideal("}]
+    ] &) /@ KeySelect[Association@rules, 
+      StringMatchQ["I" ~~ (DigitCharacter ..)]
     ];
-    ideals = (StringReplace[ToString[#, InputForm],
-      Join[ ReverseSortBy[First]@Union[vars, params],
-        { "}" -> ")", "{" -> "ideal(" }] 
-    ] &) /@ KeySelect[rp, StringMatchQ["I" ~~ (DigitCharacter ..)] ];
+    idealCmd = StringReplace[cmd, KeyValueMap[Rule]@ideals];
     {
-      ringStr <> StringReplace[cmd, KeyValueMap[Rule]@ideals], 
-      ReverseSortBy[First]@Map[Reverse]@Union[vars, params]
+      {baseRingCmd, ringCmd, idealCmd},
+      ReverseSortBy[First]@Map[Reverse]@rls
     }
-  ]
+  ];
 
 
-SyntaxInformation[AssociatedPrimesM2] = {"ArgumentsPattern" -> {_, _}};
-AssociatedPrimesM2[i1 : (List|And)[Except[_List]..], v : _] :=
-  Module[{cmd, ideal1, rules, vars, res, out},
-    ideal1 = toSubtractList@i1;
-    vars = Flatten[{v}];
-    {cmd, rules} = toCommandIdealsM2[
-      "associatedPrimes I1",
-      {"I1" -> ideal1},
-      vars,
-      Complement[Variables@ideal1, vars]
-    ];
-    If[FailureQ[res = EvaluateM2@cmd],
-      Return[$Failed]
-    ];
+parseIdealOutput[res_, rules : KeyValuePattern[{}] ] :=
+  Module[{out},
     out = First@Flatten@StringCases[res, 
       "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
     ];
     StringReplace[rules]@StringJoin@StringSplit[out, 
-      "ideal" ~~ "("|" (" ~~ s:Longest[__] ~~ ")" /;StringFreeQ[s, "ideal"] 
+      "ideal" ~~ "("|" (" ~~ s:Longest[___] ~~ ")" /;StringFreeQ[s, "ideal"] 
           :> StringJoin["List[", s, "]"] 
     ] // ToExpression
+  ];
+
+
+parseMapOutput[res_, rules : KeyValuePattern[{}] ] :=
+  Module[{out},
+    out = First@Flatten@StringCases[res, 
+      "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
+    ];
+    StringReplace[rules]@StringJoin@StringSplit[out, 
+      "map" ~~ "("|" (" ~~ s:Longest[___] ~~ ")" /;StringFreeQ[s, "map"] 
+          :> StringJoin["List[", s, "]"] 
+    ] // ToExpression // Last
+  ];
+
+
+SyntaxInformation[MinimalPresentationM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension"}
+}
+Options[MinimalPresentationM2] = {Extension -> {}, "Degrees" -> {{}}};
+MinimalPresentationM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[MinimalPresentationM2] ] :=
+  Module[{ideal, cmds, rules, vars, res1, resI, res2, resMap},
+    ideal = ToSubtractList[i1];
+    vars = Flatten[{v}];
+    {cmds, rules} = idealsCommand[
+      "J = I1; trim minimalPresentation J",
+      {"I1" -> ideal},
+      vars,
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
+    ];
+    If[FailureQ[ res1 = EvaluateM2@StringRiffle[cmds, "; "] ],
+      Return[$Failed]
+    ];
+    resI = parseIdealOutput[res1, rules];
+    If[FailureQ[ res2 = EvaluateM2["J.cache.minimalPresentationMap"] ],
+      Return[$Failed]
+    ];
+    resMap = parseMapOutput[res2, rules];
+    {resI, Thread[vars->resMap]}
+  ];
+SetAttributes[MinimalPresentationM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[AssociatedPrimesM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension"}
+}
+Options[AssociatedPrimesM2] = {Extension -> {}, "Degrees" -> {{}}};
+AssociatedPrimesM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[AssociatedPrimesM2] ] :=
+  Module[{ideal, cmds, rules, vars, res, out},
+    ideal = ToSubtractList[i1];
+    vars = Flatten[{v}];
+    {cmds, rules} = idealsCommand[
+      "associatedPrimes I1",
+      {"I1" -> ideal},
+      vars,
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
+    ];
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
+      Return[$Failed]
+    ];
+    parseIdealOutput[res, rules]
   ];
 SetAttributes[AssociatedPrimesM2, {Protected, ReadProtected}];
 
 
-SyntaxInformation[PrimaryDecompositionM2] = {"ArgumentsPattern" -> {_, _}};
-PrimaryDecompositionM2[i1 : (List|And)[Except[_List]..], v : _] :=
-  Module[{cmd, ideal1, rules, vars, res, out},
-    ideal1 = toSubtractList@i1;
+SyntaxInformation[PrimaryDecompositionM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension"}
+}
+Options[PrimaryDecompositionM2] = {Extension -> {}, "Degrees" -> {{}}};
+PrimaryDecompositionM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[PrimaryDecompositionM2] ] :=
+  Module[{ideal, cmds, rules, vars, res, out},
+    ideal = ToSubtractList[i1];
     vars = Flatten[{v}];
-    {cmd, rules} = toCommandIdealsM2[
+    {cmds, rules} = idealsCommand[
       "primaryDecomposition I1",
-      {"I1" -> ideal1},
+      {"I1" -> ideal},
       vars,
-      Complement[Variables@ideal1, vars]
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
     ];
-    If[FailureQ[res = EvaluateM2@cmd],
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
       Return[$Failed]
     ];
-    out = First@Flatten@StringCases[res, 
-      "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
-    ];
-    StringReplace[rules]@StringJoin@StringSplit[out, 
-      "ideal" ~~ "("|" (" ~~ s:Longest[__] ~~ ")" /;StringFreeQ[s, "ideal"] 
-          :> StringJoin["List[", s, "]"] 
-    ] // ToExpression
+    parseIdealOutput[res, rules]
   ];
 SetAttributes[PrimaryDecompositionM2, {Protected, ReadProtected}];
 
 
-SyntaxInformation[RadicalM2] = {"ArgumentsPattern" -> {_, _}};
-RadicalM2[i1 : (List|And)[Except[_List]..], v : _] :=
-  Module[{cmd, ideal1, rules, vars, res, out},
-    ideal1 = toSubtractList@i1;
+SyntaxInformation[RadicalM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension"}
+}
+Options[RadicalM2] = {Extension -> {}, "Degrees" -> {{}}};
+RadicalM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[RadicalM2] ] :=
+  Module[{ideal, cmds, rules, vars, res, out},
+    ideal = ToSubtractList[i1];
     vars = Flatten[{v}];
-    {cmd, rules} = toCommandIdealsM2[
+    {cmds, rules} = idealsCommand[
       "radical I1",
-      {"I1" -> ideal1},
+      {"I1" -> ideal},
       vars,
-      Complement[Variables@ideal1, vars]
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
     ];
-    If[FailureQ[res = EvaluateM2@cmd],
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
       Return[$Failed]
     ];
-    out = First@Flatten@StringCases[res, 
-      "o" ~~ (DigitCharacter ..) ~~ " = " ~~ x__ :> x
-    ];
-    StringReplace[rules]@StringJoin@StringSplit[out, 
-      "ideal" ~~ "("|" (" ~~ s:Longest[__] ~~ ")" /;StringFreeQ[s, "ideal"] 
-          :> StringJoin["List[", s, "]"] 
-    ] // ToExpression
+    parseIdealOutput[res, rules]
   ];
 SetAttributes[RadicalM2, {Protected, ReadProtected}];
 
 
-SyntaxInformation[SingularLocusM2] = {"ArgumentsPattern" -> {_, _}};
-SingularLocusM2[i1 : (List|And)[Except[_List]..], v : _] :=
-  Module[{cmd, ideal1, rules, vars, res, out},
-    ideal1 = toSubtractList@i1;
+SyntaxInformation[SingularLocusM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension"}
+}
+Options[SingularLocusM2] = {Extension -> {}, "Degrees" -> {{}}};
+SingularLocusM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[SingularLocusM2] ] :=
+  Module[{ideal, cmds, rules, vars, res, out},
+    ideal = ToSubtractList[i1];
     vars = Flatten[{v}];
-    {cmd, rules} = toCommandIdealsM2[
-      "singularLocus( I1 )",
-      {"I1" -> ideal1},
+    {cmds, rules} = idealsCommand[
+      "ideal presentation singularLocus I1",
+      {"I1" -> ideal},
       vars,
-      Complement[Variables@ideal1, vars]
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
     ];
-    If[FailureQ[res = EvaluateM2@cmd],
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
       Return[$Failed]
     ];
-    out = First@Flatten@StringCases[res, 
-      "o" ~~ (DigitCharacter ..) ~~ " = " ~~
-         Shortest[__] ~~ " / " ~~ x__ :> x
-    ];
-    StringReplace[ StringTrim@out, 
-      Join[rules, { ")" ~~ EndOfString -> "]", "ideal(" -> "List["}]
-    ] // ToExpression
+    parseIdealOutput[res, rules]
   ];
 SetAttributes[SingularLocusM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[MapKernelM2] = {
+  "ArgumentsPattern" -> {_, _, _.},
+  "OptionNames" -> {"Extension", "Degrees"}
+}
+Options[MapKernelM2] = {Extension -> {}, "Degrees" -> {{}}};
+MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[MapKernelM2] ] :=
+  Module[{idealA, vX, varsX, params, nums, ambRCmd, aRingCmd, vM, varsM, 
+      bRingCmd, cmds, res, rules},
+    idealA = ToSubtractList[i1];
+    vX = Flatten[{v}];
+    varsX = variableRules["X", vX];
+    vM = Keys[map];
+    varsM = variableRules["M", vM];
+    params = variableRules["z", Complement[Variables@idealA,vX] ];
+    nums = variableRules["a", OptionValue[Extension] ];
+    rules = ReverseSortBy[
+      Reverse /@ Union[params,varsX,varsM,nums],
+      First
+    ];
+    ambRCmd = "KK = " <> ringCommand[$BaseRingM2, nums, 
+      MinimalPolynomial[OptionValue[Extension], ToExpression@Values@nums]
+    ];
+    aRingCmd = "A = " <> ringCommand[
+      ringCommand["KK", params],
+      varsX, idealA,
+      OptionValue["Degrees"]
+    ];
+    mesListCmd = "mes = " <> StringReplace[
+      ToString[Values@map, InputForm],
+      varsX
+    ];
+    bRingCmd = "B = " <> ringCommand[
+      ringCommand["KK", params],
+      varsM
+    ];
+    cmds = {
+      ambRCmd, aRingCmd, mesListCmd, bRingCmd,
+      "kernel map(A,B,mes)"
+    };
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
+      Return[$Failed]
+    ];
+    parseIdealOutput[res, rules]
+  ];
+SetAttributes[MapKernelM2, {Protected, ReadProtected}];
 
 
 End[]
