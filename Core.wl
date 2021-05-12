@@ -7,6 +7,7 @@ ClearAll["InterfaceM2`Core`*"];
 
 InitializeM2::usage = "";
 EvaluateM2::usage = "";
+SessionCellsM2::usage = "";
 SessionHistoryM2::usage = "";
 RawSessionHistoryM2::usage = "";
 RestartM2::usage = "";
@@ -24,13 +25,16 @@ $M2String = "";
 
 $processM2 = Automatic;
 
+
 $varPatt = LetterCharacter ~~ ((LetterCharacter | DigitCharacter) ...);
 $subPatt = $varPatt | (DigitCharacter ..);
 $subLinePatt = ($subPatt | " ") ..;
 $superPatt = (DigitCharacter ..);
-$outPatt = "o" ~~ (DigitCharacter ..) ~~ (" = " | " : ");
+$inPatt = "i" ~~ (DigitCharacter ..) ~~ (" : " );
+$outPatt = "o" ~~ (DigitCharacter ..) ~~ (" = " );
+$typePatt = "o" ~~ (DigitCharacter ..) ~~ (" : ");
 $superLinePatt = ($superPatt | " ") ..;
-$quotientPatt = (Shortest[__ ~~ "\n"] ..) ~~ $outPatt ~~ ("-" ..) ~~ 
+$quotientPatt = (Shortest[__ ~~ "\n"] ..) ~~ ($outPatt|$typePatt) ~~ ("-" ..) ~~ 
    "\n" ~~ (Shortest[__ ~~ "\n" | EndOfString] ..);
 
 
@@ -39,6 +43,7 @@ Please introduce it as the argument.";
 InitializeM2::tmovrflw = 
 "Initialization time surpassed. Please verify if Macaulay2 is working properly. \
 Modify $InitializeTimeOverflowM2 to override the default value.";
+
 
 SyntaxInformation[InitializeM2] = {"ArgumentsPattern" -> {_.}};
 InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] := 
@@ -66,32 +71,95 @@ InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] :=
 SetAttributes[InitializeM2, {Protected, ReadProtected}];
 
 
-(* supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
-  Module[{posSuper, posSub, assoc, both, newStr, monomialPatt, afterStarPatt},
-    newStr = ioStr<>StringRepeat[" ", 50];
-    posSuper = StringPosition[superStr, $superPatt, Overlaps -> False];
-    posSub = StringPosition[subStr, $subPatt, Overlaps -> False];
-    both = (If[# === {}, {{}, {}}, Transpose@#] &)@Position[
-      Outer[Equal[First@#1, First@#2] &, posSub, posSuper, 1, 1], True];
-    assoc = Join[
-      MapThread[First@MaximalBy[{#1, #2}, Last] -> StringJoin["_", 
-          StringTake[subStr, #1], "^", StringTake[superStr, #2], "*"] &, 
-        {posSub[[First@both]], posSuper[[Last@both]]} ],
-      Table[ p -> StringJoin["_", StringTake[subStr, p], "*"],
-        {p, Delete[posSub, Map[List]@First@both]} ],
-      Table[ p -> StringJoin["^", StringTake[superStr, p], "*"],
-        {p, Delete[posSuper, Map[List]@Last@both]} ]
+SyntaxInformation[RestartM2] = {"ArgumentsPattern" -> {}};
+RestartM2[] := 
+  Module[{},
+    If[ FailureQ@EvaluateM2["restart;"],
+      Return[Null],
+      $M2String = ""; Return[$Failed]
     ];
-    afterStarPatt = (" " | "," | ")" | "}" | EndOfString);
-    monomialPatt = (DigitCharacter | LetterCharacter | "_" | "^" | "+" | "*") ..;
-    StringReplace[
-      StringTrim@StringReplacePart[newStr, Values@assoc, Keys@assoc],
-      (n:RepeatedNull[DigitCharacter]) ~~ (s:monomialPatt) ~~ 
-        "*" ~~ (f:afterStarPatt) :> If[n == "", "", n<>"*"] <> s <> f
+  ];
+SetAttributes[RestartM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[KillM2] = {"ArgumentsPattern" -> {}}
+KillM2[] := 
+  Module[{},
+    KillProcess[M2];
+    $M2String = "";
+    Return[Null];
+  ];
+SetAttributes[KillM2, {Protected, ReadProtected}];
+
+
+multiLineStringDrop[str_, d_] := 
+  StringRiffle[StringDrop[StringSplit[str, "\n"], d], "\n"];
+
+
+multiLineStringTrim[s : {__String}] := 
+  StringDrop[s, 
+   UpTo@Min@StringCases[s, 
+      StartOfString ~~ (x : (" " ...)) :> StringLength@x]
+  ];
+
+
+createCell[res_String] := 
+  Module[{lines, out, type, parseCases},
+    lines = StringSplit[res, "\n\n"];
+    in = StringDelete[First@lines, StartOfString ~~ $inPatt];
+    parseCases = If[#1 === {}, "",
+      multiLineStringDrop[First@#1,
+        UpTo@StringLength@First@StringCases[First@#1,#2]
+      ] // StringReplace[StartOfLine ~~ (" : "|" = ") -> ">> "]
+    ] &;
+    out = parseCases[
+      Cases[lines, _String?(StringContainsQ[$outPatt])], $outPatt];
+    type = parseCases[
+      Cases[lines, _String?(StringContainsQ[$typePatt])], $typePatt];
+    parseCell@Association[
+      "Input"-> in, 
+      "Output" -> out, 
+      "Type" -> type
     ]
-  ]; *)
-supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
-  Module[{ioLen, chars, posPattF, aF, posQQ, posSuper, posSub, posSS, finalA},
+  ];
+
+
+parseCell[b_Association] :=
+  Module[{in, out0, type0, out, type},
+    {in, out0, type0} = Values[b];
+    type = parseSupersubscript@StringSplit[type0, "\n"];
+    out = Switch[type0,
+      _, parseSupersubscript@StringSplit[out0, "\n"]
+    ];
+    Association[
+      "Input"-> in, 
+      "Output" -> out, 
+      "Type" -> type
+    ]
+  ];
+
+parseQuotient[s : {__String}] :=
+  Module[{split, pattLine},
+    pattLine = (_String)?(StringMatchQ["-" ..]);
+    split = DeleteCases[{pattLine}]@SplitBy[s, MatchQ@pattLine];
+    If[Length[split] > 1,
+      StringRiffle[
+        parseQuotient@*stringTrimEqually /@ split, {"(","/",")"}],
+        FF@First@split
+    ]
+  ];
+
+parseSupersubscript[{}] := "";
+parseSupersubscript[{str1_String}] := 
+  str1;  
+parseSupersubscript[{str1_String, str2_String}] :=
+  If[StringMatchQ[str1, $superLinePatt],
+    parseSupersubscript[{str1,str2,""}],
+    parseSupersubscript[{"",str1,str2}]
+  ];
+parseSupersubscript[{superStr_String, ioStr_String, subStr_String}] :=
+  Module[{ioLen, chars, posPattF, aF, posQQ, posSuper, posSub, posSS, 
+      finalA, removeTimesPatt},
     ioLen = Max@Map[StringLength, {superStr, ioStr, subStr}];
     chars = Map[
       Join[Characters@#1, Table[" ", ioLen - StringLength@#1] ] &, 
@@ -121,86 +189,84 @@ supersubscriptM2[{superStr_String, ioStr_String, subStr_String}] :=
       ("_" <> #2 <> "*" &) @@@ aF@posSub,
       ("(" <> #1 <> "/" <> #2 <> ")*" &) @@@ aF@posQQ
     ];
+    removeTimesPatt = ("," | ")" | "}" | " +" | " -" | "[" | EndOfString);
     StringReplacePart[StringJoin@chars[[2]], Values@finalA, Keys@finalA] // 
-      StringReplace[{"*" ~~ x : ("," | ")" | "}" | " +" | " -" | "[") :> x}]
-  ];
-
-
-parsesupersubscriptM2[midPatt_] :=
-  Module[{superSubOutPatt, subOutPatt, superOutPatt},
-    superSubOutPatt = $superLinePatt ~~ "\n" ~~ midPatt ~~ 
-     "\n" ~~ $subLinePatt;
-    subOutPatt = midPatt ~~ "\n" ~~ $subLinePatt;
-    superOutPatt = $superLinePatt ~~ "\n" ~~ midPatt;
-    ReplaceAll[{
-      s_String?(StringMatchQ[superSubOutPatt]) :> 
-        supersubscriptM2[ StringSplit[s, "\n"] ], 
-      s_String?(StringMatchQ[superOutPatt]) :> 
-        supersubscriptM2[ StringSplit[s, "\n"]~Join~{""} ], 
-      s_String?(StringMatchQ[subOutPatt]) :> 
-        supersubscriptM2[ {""}~Join~StringSplit[s, "\n"] ]
-    }]
-  ];
-
-
-quotientM2[{t_String, io_String, b_String}] :=
-  Module[{bot, top},
-    top = StringTrim@parsesupersubscriptM2[ Shortest[__] ]@t;
-    bot = StringReplace[
-      StringTrim@parsesupersubscriptM2[ Shortest[__] ]@b,
-      StartOfString ~~ "(" ~~ 
-        x : (Shortest[__ ~~ ","] .. ~~ Shortest[__]) ~~ ")" ~~ 
-        EndOfString :> StringJoin["ideal(", x, ")"]
-    ];
-    StringJoin[StringDelete[io, ("-" ..) ~~ "\n"], top, " / ", bot]
-  ]
-
-
-parseLineM2[out_String] :=
-  Module[{RP1, RP0},
-    RP0 = parsesupersubscriptM2[ $outPatt ~~ Shortest[__] ];
-    RP1 = ReplaceAll[{
-      s_String?(StringMatchQ[$quotientPatt]) :> 
-        quotientM2@StringSplit[s, x : ($outPatt ~~ ("-" ..) ~~ "\n") :> x]
-    }];
-    RP0@RP1@StringSplit[out, "\n\n"]
+      StringReplace[{"*" ~~ x : removeTimesPatt :> x}]
   ];
 
 
 EvaluateM2::tmovrflw = 
 "Default maximum evaluation time surpassed. \
 Modify $EvaluationTimeOverflowM2 to override the default value.";
-
 SyntaxInformation[EvaluateM2] = {"ArgumentsPattern" -> {_}};
 EvaluateM2[cmd_String] :=
-  Module[{res = "", buf = "", timeStep=0.02},
+  Module[{res = "", buf = "", timeStep=0.02, trimmedRes},
     If[Head[M2] =!= ProcessObject || ProcessStatus@M2 == "Finished", 
-      M2 = InitializeM2[$ProcessM2] 
+      M2 = InitializeM2[$processM2] 
     ];
     WriteLine[M2, cmd];
-    TimeConstrained[
-      While[!StringMatchQ[buf, ___ ~~ "\ni" ~~ (DigitCharacter ..) ~~ " : "],
-        Pause[timeStep];
-        buf = ReadString[M2, EndOfBuffer];
-        res = StringJoin[res, buf];
-        $M2String = StringJoin[$M2String, buf];
+    CheckAbort[
+      TimeConstrained[
+        While[!StringMatchQ[buf, ___ ~~ "\n" ~~ "i" ~~ (DigitCharacter ..) ~~ " : "],
+          Pause[timeStep];
+          buf = ReadString[M2, EndOfBuffer];
+          res = StringJoin[res, buf];
+          $M2String = StringJoin[$M2String, buf];
+        ],
+        $EvaluationTimeOverflowM2,
+        Message[EvaluateM2::tmovrflw, $EvaluationTimeOverflowM2];
+        KillM2[]; Return[$Failed]
       ],
-      $EvaluationTimeOverflowM2,
-      Message[EvaluateM2::tmovrflw, $EvaluationTimeOverflowM2];
-      KillM2[]; Return[$Failed]
+      KillM2[]
     ];
-    StringDelete[res, "\n\ni" ~~ (DigitCharacter ..) ~~ " : "] // 
-      If[$PrintRawM2, Echo, Identity] // 
-      parseLineM2 // 
+    trimmedRes = StringDelete[res, "\n\n" ~~ $inPatt] // 
+      If[$PrintRawM2, Echo, Identity];
+    createCell[trimmedRes] // 
       If[$PrintDebugM2, Echo, Identity]
   ];
 SetAttributes[EvaluateM2, {Protected, ReadProtected}];
 
 
-SyntaxInformation[SessionHistoryM2] = {"ArgumentsPattern" -> {}};
+SyntaxInformation[SessionCellsM2] = {"ArgumentsPattern" -> {_.}};
+SessionCellsM2[Infinity | All] := 
+  SessionCellsM2[];
+SessionCellsM2[n_Integer?NonNegative] := 
+  Take[SessionCellsM2[], UpTo@n];
+SessionCellsM2[n_Integer?Negative] := 
+  Reverse@Take[Reverse@SessionCellsM2[], UpTo@Abs@n];
+SessionCellsM2[] := 
+  Module[{split},
+    split = StringSplit[$M2String, "\n\n"];
+    groups = Join @@@ Partition[
+      SplitBy[split, MatchQ[_String?(StringContainsQ[$inPatt])] ],
+      UpTo[2]
+    ];
+    (createCell@StringRiffle[#,"\n\n"] &) /@ groups
+  ];
+SetAttributes[SessionCellsM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[SessionHistoryM2] = {"ArgumentsPattern" -> {_.}};
+SessionHistoryM2[Infinity | All] := 
+  SessionHistoryM2[];
+SessionHistoryM2[n_Integer?NonNegative] := 
+  Take[SessionHistoryM2[], UpTo@n];
+SessionHistoryM2[n_Integer?Negative] := 
+  Reverse@Take[Reverse@SessionHistoryM2[], UpTo@Abs@n];
 SessionHistoryM2[] := 
-  Module[{},
-    parseLineM2@$M2String
+  Module[{cells, cellF},
+    cells = SessionCellsM2[];
+    cellF = Join[
+      {"I"<>ToString[First@#2]<>" : "<>Lookup[#1, "Input"]},
+      MapThread[
+        (If[MissingQ[#1] || #1 == "", Nothing, #2<>#1] &),
+        {
+          Lookup[#1, {"Output","Type"}], 
+          { "O"<>ToString[First@#2]<>" = ",
+            "O"<>ToString[First@#2]<>" : " }
+        }] 
+    ] &;
+    Join @@ MapIndexed[cellF, cells]
   ];
 SetAttributes[SessionHistoryM2, {Protected, ReadProtected}];
 
@@ -211,27 +277,6 @@ RawSessionHistoryM2[] :=
     $M2String
   ];
 SetAttributes[RawSessionHistoryM2, {Protected, ReadProtected}];
-
-
-SyntaxInformation[RestartM2] = {"ArgumentsPattern" -> {}};
-RestartM2[] := 
-  Module[{},
-    If[ FailureQ@EvaluateM2["restart;"],
-      Return[Null],
-      $M2String = ""; Return[$Failed]
-    ];
-  ];
-SetAttributes[RestartM2, {Protected, ReadProtected}];
-
-
-SyntaxInformation[KillM2] = {"ArgumentsPattern" -> {}}
-KillM2[] := 
-  Module[{},
-    KillProcess[M2];
-    $M2String = "";
-    Return[Null];
-  ];
-SetAttributes[KillM2, {Protected, ReadProtected}];
 
 
 End[];
