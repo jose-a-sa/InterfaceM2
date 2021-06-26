@@ -34,8 +34,7 @@ $inPatt = "i" ~~ (DigitCharacter ..) ~~ (" : " );
 $outPatt = "o" ~~ (DigitCharacter ..) ~~ (" = " );
 $typePatt = "o" ~~ (DigitCharacter ..) ~~ (" : ");
 $superLinePatt = ($superPatt | " ") ..;
-$quotientPatt = (Shortest[__ ~~ "\n"] ..) ~~ ($outPatt|$typePatt) ~~ ("-" ..) ~~ 
-   "\n" ~~ (Shortest[__ ~~ "\n" | EndOfString] ..);
+$multilinePatt = Repeated["-", {500, Infinity}] ~~ "\n";
 
 
 InitializeM2::nspec = "M2 process location was never specified. \
@@ -104,50 +103,40 @@ multiLineStringTrim[s : {__String}] :=
 
 
 createCell[res_String] := 
-  Module[{lines, out, type, parseCases},
+  Module[{lines, in, out0, type0, out, type, dropStrCases}, 
+    dropStrCases = multiLineStringDrop[#1, 
+      UpTo@StringLength@First@StringCases[#1, #2]
+    ] &;
     lines = StringSplit[res, "\n\n"];
     in = StringDelete[First@lines, StartOfString ~~ $inPatt];
-    parseCases = If[#1 === {}, "",
-      multiLineStringDrop[First@#1,
-        UpTo@StringLength@First@StringCases[First@#1,#2]
-      ] // StringReplace[StartOfLine ~~ (" : "|" = ") -> ">> "]
-    ] &;
-    out = parseCases[
-      Cases[lines, _String?(StringContainsQ[$outPatt])], $outPatt];
-    type = parseCases[
-      Cases[lines, _String?(StringContainsQ[$typePatt])], $typePatt];
-    parseCell@Association[
-      "Input"-> in, 
-      "Output" -> out, 
-      "Type" -> type
-    ]
-  ];
-
-
-parseCell[b_Association] :=
-  Module[{in, out0, type0, out, type},
-    {in, out0, type0} = Values[b];
+    type0 = dropStrCases[Last@Cases[lines, 
+      _String?(StringContainsQ[$typePatt])], $typePatt];
+    out0 = dropStrCases[parseMultiline@Cases[lines, 
+      _String?(StringContainsQ[$outPatt])], $outPatt];
     type = parseSupersubscript@StringSplit[type0, "\n"];
-    out = Switch[type0,
+    out = Switch[type0, 
       _, parseSupersubscript@StringSplit[out0, "\n"]
     ];
     Association[
-      "Input"-> in, 
+      "Input" -> in, 
       "Output" -> out, 
       "Type" -> type
     ]
   ];
 
-parseQuotient[s : {__String}] :=
-  Module[{split, pattLine},
-    pattLine = (_String)?(StringMatchQ["-" ..]);
-    split = DeleteCases[{pattLine}]@SplitBy[s, MatchQ@pattLine];
-    If[Length[split] > 1,
-      StringRiffle[
-        parseQuotient@*stringTrimEqually /@ split, {"(","/",")"}],
-        FF@First@split
-    ]
+
+parseMultiline[{}] := "";
+parseMultiline[{str_}] := 
+  str /; StringFreeQ[str, $multilinePatt];
+parseMultiline[{str_}] :=
+  Module[{outPattLen, lineSepPatt, split},
+    outPattLen = StringLength@First@StringCases[str, $outPatt];
+    lineSepPatt = StringRepeat[" ", outPattLen] ~~ $multilinePatt;
+    split = StringSplit[DeleteCases[StringSplit[str, lineSepPatt],
+      _String?(StringMatchQ[lineSepPatt])], "\n"];
+    StringRiffle[StringJoin @@@ Transpose[split], "\n"]
   ];
+
 
 parseSupersubscript[{}] := "";
 parseSupersubscript[{str1_String}] := 
@@ -241,7 +230,7 @@ SessionCellsM2[] :=
       SplitBy[split, MatchQ[_String?(StringContainsQ[$inPatt])] ],
       UpTo[2]
     ];
-    (createCell@StringRiffle[#,"\n\n"] &) /@ groups
+    (createCell@StringRiffle[#,"\n\n"] &) /@ Drop[groups,-1]
   ];
 SetAttributes[SessionCellsM2, {Protected, ReadProtected}];
 
