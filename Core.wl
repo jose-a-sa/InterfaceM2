@@ -46,7 +46,7 @@ Modify $InitializeTimeOverflowM2 to override the default value.";
 
 SyntaxInformation[InitializeM2] = {"ArgumentsPattern" -> {_.}};
 InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] := 
-  Module[{buf = "", m2, timeStep = 0.01},
+  Module[{buf = "", m2, timeBuf = 0.01},
     If[proc === Automatic,
       If[$processM2 === Automatic, 
         Message[InitializeM2::nspec]; Return[Null]
@@ -56,7 +56,7 @@ InitializeM2[proc : (_String | {__String} | Automatic) : Automatic] :=
     m2 = StartProcess[$processM2];
     TimeConstrained[
       While[!StringMatchQ[buf, ___ ~~ "\ni" ~~ (DigitCharacter ..) ~~ " : "],
-        Pause[timeStep];
+        Pause[timeBuf];
         buf = ReadString[m2, EndOfBuffer];
         $M2String = StringJoin[$M2String, buf];
       ],
@@ -75,7 +75,7 @@ RestartM2[] :=
   Module[{},
     If[ FailureQ@EvaluateM2["restart;"],
       Return[Null],
-      $M2String = ""; Return[$Failed]
+      KillM2[]; Return[ InitializeM2[] ]
     ];
   ];
 SetAttributes[RestartM2, {Protected, ReadProtected}];
@@ -103,13 +103,14 @@ multiLineStringTrim[s : {__String}] :=
 
 
 createCell[res_String] := 
-  Module[{lines, in, out0, type0, out, type, dropStrCases}, 
-    dropStrCases = multiLineStringDrop[#1, 
-      UpTo@StringLength@First@StringCases[#1, #2]
-    ] &;
+  Module[{lines, in, out0, type0, out, type, dropStrCases, getPatt}, 
+    dropStrCases = {l, p} |-> multiLineStringDrop[l, 
+      (If[Length[#]>0, UpTo@StringLength@First@#,
+        0] &)@StringCases[l, p]
+    ];
     lines = StringSplit[res, "\n\n"];
     in = StringDelete[First@lines, StartOfString ~~ $inPatt];
-    type0 = dropStrCases[Last@Cases[lines, 
+    type0 = dropStrCases[parseMultiline@Cases[lines, 
       _String?(StringContainsQ[$typePatt])], $typePatt];
     out0 = dropStrCases[parseMultiline@Cases[lines, 
       _String?(StringContainsQ[$outPatt])], $outPatt];
@@ -138,6 +139,7 @@ parseMultiline[{str_}] :=
   ];
 
 
+parseSupersubscript[""] := "";
 parseSupersubscript[{}] := "";
 parseSupersubscript[{str1_String}] := 
   str1;  
