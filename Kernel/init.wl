@@ -14,7 +14,7 @@ Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
 on how to setup M2 on your desired distro.";
 
 loadInterfaceM2[] := 
-  Module[{cmdCheck, windowsCheck, unixCheck},
+  Module[{cmdCheck, windowsCheck, unixCheck, fixPath},
     cmdCheck[cmd : (_String | {__String}), 
         tests : (_List | _Association | _Rule) : {}] :=
       Module[{proc},
@@ -47,6 +47,13 @@ loadInterfaceM2[] :=
       ];
       Return[False];
     ];
+    fixPath[] := Module[{},
+      SetEnvironment["PATH" -> StringRiffle[Join[
+          {"/usr/local/bin"},
+          StringSplit[Environment["PATH"], ":"]
+        ], ":"]
+      ];
+    ];
     unixCheck[] := Module[{whichM2},
       whichM2 = cmdCheck[{"which", "M2"},
         "StandardOutput" -> 
@@ -64,6 +71,7 @@ loadInterfaceM2[] :=
     If[
       Switch[$OperatingSystem,
         "Windows", windowsCheck[],
+        "MacOSX", fixPath[]; unixCheck[],
         _, unixCheck[]
       ],
       InterfaceM2`Core`KillM2[];
