@@ -48,8 +48,10 @@ loadInterfaceM2[] :=
       Return[False];
     ];
     fixPath[] := Module[{},
-      SetEnvironment["PATH" -> StringRiffle[Join[
-          {"/usr/local/bin"},
+      SetEnvironment["PATH" -> StringRiffle[Join[{
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin"},
           StringSplit[Environment["PATH"], ":"]
         ], ":"]
       ];
