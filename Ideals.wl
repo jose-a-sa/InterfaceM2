@@ -15,6 +15,8 @@ SingularLocusM2::usage = "";
 MapKernelM2::usage = "";
 MinimalPresentationM2::usage = "";
 KrullDimensionM2::usage = "";
+SpecDimM2::usage = "";
+ProjDimM2::usage = "";
 
 
 $BaseRingM2 = "QQ";
@@ -227,6 +229,56 @@ SingularLocusM2[i1 : (List|And)[Except[_List]..], v : _,
     parseIdealOutput[res, rules]
   ];
 SetAttributes[SingularLocusM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[SpecDimM2] = {
+  "ArgumentsPattern" -> {_, _, OptionsPattern[]},
+  "OptionNames" -> {"Extension"}
+};
+Options[SpecDimM2] = {Extension -> {}, "Degrees" -> {{}}};
+SpecDimM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[SpecDimM2] ] :=
+  Module[{ideal, cmds, rules, vars, res},
+    ideal = ToSubtractList[i1];
+    vars = Flatten[{v}];
+    {cmds, rules} = idealCommand[
+      "dim Spec(R/I1)",
+      {"I1" -> ideal},
+      vars,
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
+    ];
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
+      Return[res]
+    ];
+    ToExpression@res["Output"]
+  ];
+SetAttributes[SpecDimM2, {Protected, ReadProtected}];
+
+
+SyntaxInformation[ProjDimM2] = {
+  "ArgumentsPattern" -> {_, _, OptionsPattern[]},
+  "OptionNames" -> {"Extension"}
+};
+Options[ProjDimM2] = {Extension -> {}, "Degrees" -> {{}}};
+ProjDimM2[i1 : (List|And)[Except[_List]..], v : _, 
+    OptionsPattern[ProjDimM2] ] :=
+  Module[{ideal, cmds, rules, vars, res},
+    ideal = ToSubtractList[i1];
+    vars = Flatten[{v}];
+    {cmds, rules} = idealCommand[
+      "dim Proj(R/I1)",
+      {"I1" -> ideal},
+      vars,
+      Complement[Variables@ideal, vars],
+      OptionValue[Extension]
+    ];
+    If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
+      Return[res]
+    ];
+    ToExpression@res["Output"]
+  ];
+SetAttributes[ProjDimM2, {Protected, ReadProtected}];
 
 
 SyntaxInformation[KrullDimensionM2] = {
