@@ -32,8 +32,8 @@ variableRules[s_String, vars_List] :=
   ];
 
 
-ringCommand[ambR_, vars : KeyValuePattern[{}], 
-    params : KeyValuePattern[{}] : {},  q_ : {}, deg_ : {}] := 
+ringCommand[ambR_, vars : KeyValuePattern[_]|{}, 
+    params : KeyValuePattern[_]|{} : {},  q_ : {}, deg_ : {}] := 
   Module[{idealQ, varOpts, varStr, quoStr}, 
     idealQ = StringReplace[(ToString[#, InputForm] &) /@ q, Union[vars,params] ];
     varOpts = If[
@@ -76,7 +76,7 @@ idealCommand[cmd_, rules_, v_List, p_List, ext_List : {}] :=
   ];
 
 
-parseIdealOutput[res_, rules : KeyValuePattern[{}] ] :=
+parseIdealOutput[res_, rules : KeyValuePattern[_] ] :=
   Module[{out},
     out = res["Output"];
     StringReplace[rules]@StringJoin@StringSplit[out, 
@@ -86,7 +86,7 @@ parseIdealOutput[res_, rules : KeyValuePattern[{}] ] :=
   ];
 
 
-parseMapOutput[res_, rules : KeyValuePattern[{}] ] :=
+parseMapOutput[res_, rules : KeyValuePattern[_] ] :=
   Module[{out},
     out = res["Output"];
     StringReplace[rules]@StringJoin@StringSplit[out, 
