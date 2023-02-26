@@ -17,6 +17,7 @@ MinimalPresentationM2::usage = "";
 KrullDimensionM2::usage = "";
 SpecDimM2::usage = "";
 ProjDimM2::usage = "";
+VersalDeformationsM2::usage = "";
 
 
 $BaseRingM2 = "QQ";
@@ -354,6 +355,61 @@ MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _,
     parseIdealOutput[res, rules]
   ];
 SetAttributes[MapKernelM2, {Protected, ReadProtected}];
+
+
+Options[VersalDeformationsM2] = {Extension -> {}, "Degrees" -> {{}}};
+VersalDeformationsM2[
+    i1 : (List|And)[Except[_List]..], v : _,
+    {degMin_Integer, degMax_Integer} /; degMin<=degMax, 
+    OptionsPattern[VersalDeformationsM2] ] :=
+  Module[{ideal, vars, params, nums, rules, ambRCmd, ringCmd, idealCmd, preCmd, output,
+      fEntriesCell, rEntriesCell, gEntriesCell, cEntriesCell},
+    ideal = ToSubtractList[i1];
+    vars = variableRules["X", Flatten@{v}];
+    params = variableRules["z", Complement[Variables@ideal,Flatten@{v}] ];
+    nums = variableRules["a", OptionValue[Extension] ];
+    tvars = {"t_"~~(num : Longest[DigitCharacter..]) :>  "\[FormalT]["<>num<>"]"};
+    rules = ReverseSortBy[
+      Reverse /@ Union[params,vars,nums],
+      First
+    ];
+    ambRCmd = "K = " <> ringCommand[$BaseRingM2, nums, {},
+      MinimalPolynomial[OptionValue[Extension], ToExpression@Values@nums]
+    ];
+    ringCmd = "A = " <> ringCommand[
+      ringCommand["K", params],
+      vars, Union[params, nums], {},
+      OptionValue["Degrees"]
+    ];
+    idealCmd = "I = ideal " <> StringReplace[
+      ToString[ideal, InputForm],
+      Union[params,vars]
+    ];
+    preCmd = StringRiffle[{"needsPackage \"VersalDeformations\"", ambRCmd, ringCmd,
+      idealCmd}, "; "];
+    output = EvaluateM2[preCmd];
+    Assert[!FailureQ@output, "SetupCommandFailed"];
+    output = EvaluateM2[
+      "T1 = cotangentCohomology1"<>StringRiffle[{degMin, degMax, "I"}, {"(",",",");"}]];
+    Assert[!FailureQ@output, "cotangentCohomology1Failed"];
+    output = EvaluateM2["T2 = cotangentCohomology2(I);"];
+    Assert[!FailureQ@output, "cotangentCohomology2Failed"];
+    output = EvaluateM2["(F,R,G,C) = versalDeformation(gens(I),T1,T2);"];
+    Assert[!FailureQ@output, "versalDeformationFailed"];
+    fEntriesCell = EvaluateM2["F / entries"];
+    Assert[!FailureQ[fEntriesCell], "FentriesFailed"];
+    rEntriesCell = EvaluateM2["R / entries"];
+    Assert[!FailureQ[rEntriesCell], "RentriesFailed"];
+    gEntriesCell = EvaluateM2["G / entries"];
+    Assert[!FailureQ[gEntriesCell], "GentriesFailed"];
+    cEntriesCell = EvaluateM2["C / entries"];
+    Assert[!FailureQ[cEntriesCell], "CentriesFailed"];
+    Map[
+      ToExpression@*StringReplace[tvars]@*StringReplace[rules]@*Lookup["Output"],
+      {fEntriesCell, rEntriesCell, gEntriesCell, cEntriesCell}
+    ]
+  ];
+SetAttributes[VersalDeformationsM2, {Protected, ReadProtected}];
 
 
 End[]
