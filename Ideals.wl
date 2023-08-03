@@ -97,41 +97,6 @@ parseMapOutput[res_, rules : KeyValuePattern[_] ] :=
   ];
 
 
-SyntaxInformation[MinimalPresentationM2] = {
-  "ArgumentsPattern" -> {_, _, OptionsPattern[]},
-  "OptionNames" -> {"Extension"}
-}
-Options[MinimalPresentationM2] = {Extension -> {}, "Degrees" -> {{}}};
-MinimalPresentationM2[i1 : (List|And)[Except[_List]..], v : _, 
-    OptionsPattern[MinimalPresentationM2] ] :=
-  Module[{ideal, cmds, rules, vars, res1, resI, res2, resMap},
-    ideal = ToSubtractList[i1];
-    vars = Flatten[{v}];
-    {cmds, rules} = idealCommand[
-      "J = I1; trim minimalPresentation J",
-      {"I1" -> ideal},
-      vars,
-      Complement[Variables@ideal, vars],
-      OptionValue[Extension]
-    ];
-    If[ FailureQ[ res1 = EvaluateM2@StringRiffle[cmds, "; "] ], 
-      Return[res1]
-    ];
-    resI = parseIdealOutput[res1, rules];
-    If[FailureQ[ res2 = EvaluateM2["J.cache.minimalPresentationMap"] ],
-      Return[res2]
-    ];
-    resMap = parseMapOutput[res2, rules];
-    { 
-      resI, 
-      DeleteCases[Thread[vars->resMap], 
-        HoldPattern[Rule][x_,x_]
-      ]
-    }
-  ];
-SetAttributes[MinimalPresentationM2, {Protected, ReadProtected}];
-
-
 SyntaxInformation[AssociatedPrimesM2] = {
   "ArgumentsPattern" -> {_, _, OptionsPattern[]},
   "OptionNames" -> {"Extension"}
@@ -161,7 +126,7 @@ SyntaxInformation[PrimaryDecompositionM2] = {
   "ArgumentsPattern" -> {_, _, OptionsPattern[]},
   "OptionNames" -> {"Extension"}
 };
-Options[PrimaryDecompositionM2] = {Extension -> {}, "Degrees" -> {{}}};
+Options[PrimaryDecompositionM2] = {Extension -> {}, "Degrees" -> {{}}, "ParameterIdeal" -> {}};
 PrimaryDecompositionM2[i1 : (List|And)[Except[_List]..], v : _, 
     OptionsPattern[PrimaryDecompositionM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
@@ -309,21 +274,17 @@ KrullDimensionM2[i1 : (List|And)[Except[_List]..], v : _,
 SetAttributes[KrullDimensionM2, {Protected, ReadProtected}];
 
 
-SyntaxInformation[MapKernelM2] = {
-  "ArgumentsPattern" -> {_, _, _, OptionsPattern[]},
-  "OptionNames" -> {"Extension", "Degrees"}
-};
-Options[MapKernelM2] = {Extension -> {}, "Degrees" -> {{}}};
+Options[MapKernelM2] = {Extension -> {}, "Degrees" -> {{}}, "ParameterIdeal" -> {}};
 MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _, 
     OptionsPattern[MapKernelM2] ] :=
-  Module[{idealA, vX, varsX, params, nums, ambRCmd, aRingCmd, vM, varsM, 
+  Module[{idealA, vX, varsX, params, nums, ambRCmd, pRingCmd, aRingCmd, vM, varsM, 
       bRingCmd, cmds, res, rules},
     idealA = ToSubtractList[i1];
     vX = Flatten[{v}];
     varsX = variableRules["X", vX];
     vM = Keys[map];
     varsM = variableRules["M", vM];
-    params = variableRules["z", Complement[Variables@idealA,vX] ];
+    params = variableRules["z", Union[Variables@OptionValue["ParameterIdeal"], Complement[Variables@idealA, vX]] ];
     nums = variableRules["a", OptionValue[Extension] ];
     rules = ReverseSortBy[
       Reverse /@ Union[params,varsX,varsM,nums],
@@ -332,8 +293,9 @@ MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _,
     ambRCmd = "KK = " <> ringCommand[$BaseRingM2, nums, {},
       MinimalPolynomial[OptionValue[Extension], ToExpression@Values@nums]
     ];
+    pRingCmd = "PP = " <> ringCommand["KK", params, OptionValue["ParameterIdeal"]];
     aRingCmd = "A = " <> ringCommand[
-      ringCommand["KK", params],
+      "PP",
       varsX, Union[params, nums], idealA,
       OptionValue["Degrees"]
     ];
@@ -342,11 +304,11 @@ MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _,
       varsX
     ];
     bRingCmd = "B = " <> ringCommand[
-      ringCommand["KK", params],
+      "PP",
       varsM
     ];
     cmds = {
-      ambRCmd, aRingCmd, mesListCmd, bRingCmd,
+      ambRCmd, pRingCmd, aRingCmd, mesListCmd, bRingCmd,
       "kernel map(A,B,mes)"
     };
     If[FailureQ[ res = EvaluateM2@StringRiffle[cmds, "; "] ],
@@ -357,10 +319,59 @@ MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _,
 SetAttributes[MapKernelM2, {Protected, ReadProtected}];
 
 
+Options[MinimalPresentationM2] = {Extension -> {}, "Degrees" -> {{}}, "ParameterIdeal" -> {}};
+MinimalPresentationM2[
+    i1 : (List | And)[Except[_List] ..], v : _, 
+    OptionsPattern[MinimalPresentationM2] ] := 
+  Module[{ideal, vars, params, nums, rules, ambRCmd, pRingCmd, ringCmd, idealCmd, preCmd, 
+      preOutput, minIdealOut, mapOutput}, 
+    ideal = ToSubtractList[i1];
+    vars = variableRules["X", Flatten@{v}];
+    params = variableRules["z", 
+      Union[Variables@OptionValue["ParameterIdeal"], Complement[Variables@ideal, Flatten@{v}]]
+    ];
+    nums = variableRules["a", OptionValue[Extension]];
+    rules = ReverseSortBy[Reverse /@ Union[params, vars, nums], First];
+    ambRCmd = "KK = " <> ringCommand[$BaseRingM2, nums, {}, 
+      MinimalPolynomial[OptionValue[Extension], 
+      ToExpression@Values@nums]
+    ];
+    pRingCmd = "PP = " <> ringCommand["KK", params, 
+      OptionValue["ParameterIdeal"]
+    ];
+    ringCmd = "A = " <> ringCommand["PP", vars, 
+      Union[params, nums], {}, OptionValue["Degrees"]];
+    idealCmd = "I = ideal " <> StringReplace[ToString[ideal, InputForm], Union[params, vars]];
+    preCmd = StringRiffle[{ambRCmd, pRingCmd, ringCmd, idealCmd}, "; "];
+    preOutput = EvaluateM2[preCmd];
+    Assert[!FailureQ@preOutput, "preCmdFailed"];
+    minIdealOut = EvaluateM2[
+      "first entries gens trim minimalPresentation I"];
+    Assert[!FailureQ@minIdealOut, "minimalPresentationFailed"];
+    mapOutput = EvaluateM2[
+      "{gens(A)|gens(baseRing A), first entries I.cache.minimalPresentationMap.matrix}"];
+    Assert[!FailureQ@minIdealOut, "minimalPresentationFailed"];
+    {minIdealOut, mapOutput} = Map[
+      ToExpression@*StringReplace[rules]@*Lookup["Output"],
+      {minIdealOut, mapOutput}
+    ];
+    {
+      minIdealOut, 
+      SortBy[First]@Thread[Rule @@ mapOutput] // DeleteCases[HoldPattern[Rule][x_,x_]]
+    }
+];
+SetAttributes[MinimalPresentationM2, {Protected, ReadProtected}];
+
+
 Options[VersalDeformationsM2] = {Extension -> {}, "Degrees" -> {{}}};
 VersalDeformationsM2[
     i1 : (List|And)[Except[_List]..], v : _,
-    {degMin_Integer, degMax_Integer} /; degMin<=degMax, 
+    deg_Integer?NonNegative, 
+    opts : OptionsPattern[VersalDeformationsM2] ] := 
+  VersalDeformationsM2[i1, v, {deg, deg}, opts];
+VersalDeformationsM2[
+    i1 : (List|And)[Except[_List]..], v : _,
+    {dm_Integer, dM_Integer} /; (dm <= dM), 
     OptionsPattern[VersalDeformationsM2] ] :=
   Module[{ideal, vars, params, nums, rules, ambRCmd, ringCmd, idealCmd, preCmd, output,
       fEntriesCell, rEntriesCell, gEntriesCell, cEntriesCell},
@@ -381,7 +392,7 @@ VersalDeformationsM2[
       vars, Union[params, nums], {},
       OptionValue["Degrees"]
     ];
-    idealCmd = "I = ideal " <> StringReplace[
+    idealCmd = "I = gens ideal " <> StringReplace[
       ToString[ideal, InputForm],
       Union[params,vars]
     ];
@@ -389,12 +400,11 @@ VersalDeformationsM2[
       idealCmd}, "; "];
     output = EvaluateM2[preCmd];
     Assert[!FailureQ@output, "SetupCommandFailed"];
-    output = EvaluateM2[
-      "T1 = cotangentCohomology1"<>StringRiffle[{degMin, degMax, "I"}, {"(",",",");"}]];
-    Assert[!FailureQ@output, "cotangentCohomology1Failed"];
-    output = EvaluateM2["T2 = cotangentCohomology2(I);"];
-    Assert[!FailureQ@output, "cotangentCohomology2Failed"];
-    output = EvaluateM2["(F,R,G,C) = versalDeformation(gens(I),T1,T2);"];
+    output = EvaluateM2[StringJoin[
+      "(F,R,G,C) = versalDeformation(I,",
+      StringRiffle[Map[# <> StringRiffle[{dm, dM}, {"(", ",", ",I)"}] &, {"CT^1", "CT^2"}], ","],
+      ");"]
+    ];
     Assert[!FailureQ@output, "versalDeformationFailed"];
     fEntriesCell = EvaluateM2["F / entries"];
     Assert[!FailureQ[fEntriesCell], "FentriesFailed"];
