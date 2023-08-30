@@ -102,7 +102,7 @@ SyntaxInformation[AssociatedPrimesM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[AssociatedPrimesM2] = {Extension -> {}, "Degrees" -> {{}}};
-AssociatedPrimesM2[i1 : (List|And)[Except[_List]..], v : _, 
+AssociatedPrimesM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[AssociatedPrimesM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -127,7 +127,7 @@ SyntaxInformation[PrimaryDecompositionM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[PrimaryDecompositionM2] = {Extension -> {}, "Degrees" -> {{}}, "ParameterIdeal" -> {}};
-PrimaryDecompositionM2[i1 : (List|And)[Except[_List]..], v : _, 
+PrimaryDecompositionM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[PrimaryDecompositionM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -152,7 +152,7 @@ SyntaxInformation[RadicalM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[RadicalM2] = {Extension -> {}, "Degrees" -> {{}}};
-RadicalM2[i1 : (List|And)[Except[_List]..], v : _, 
+RadicalM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[RadicalM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -177,7 +177,7 @@ SyntaxInformation[SingularLocusM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[SingularLocusM2] = {Extension -> {}, "Degrees" -> {{}}};
-SingularLocusM2[i1 : (List|And)[Except[_List]..], v : _, 
+SingularLocusM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[SingularLocusM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -202,7 +202,7 @@ SyntaxInformation[SpecDimM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[SpecDimM2] = {Extension -> {}, "Degrees" -> {{}}};
-SpecDimM2[i1 : (List|And)[Except[_List]..], v : _, 
+SpecDimM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[SpecDimM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -227,7 +227,7 @@ SyntaxInformation[ProjDimM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[ProjDimM2] = {Extension -> {}, "Degrees" -> {{}}};
-ProjDimM2[i1 : (List|And)[Except[_List]..], v : _, 
+ProjDimM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[ProjDimM2] ] :=
   Module[{ideal, cmds, rules, vars, res},
     ideal = ToSubtractList[i1];
@@ -252,7 +252,7 @@ SyntaxInformation[KrullDimensionM2] = {
   "OptionNames" -> {"Extension"}
 };
 Options[KrullDimensionM2] = {Extension -> {}, "Degrees" -> {{}}};
-KrullDimensionM2[is : {(List|And)[Except[_List]..]..}, v : _, 
+KrullDimensionM2[is : {(List|And)[Except[_List]...]..}, v : _, 
     OptionsPattern[KrullDimensionM2] ] :=
   Module[{l1, cmds, rules, vars, res},
     l1 = MapIndexed["I"<>ToString[First@#2] -> ToSubtractList[#1] &, is];
@@ -268,14 +268,14 @@ KrullDimensionM2[is : {(List|And)[Except[_List]..]..}, v : _,
     ];
     ToExpression@res["Output"]
   ];
-KrullDimensionM2[i1 : (List|And)[Except[_List]..], v : _, 
+KrullDimensionM2[i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[KrullDimensionM2] ] :=
   First@KrullDimensionM2[{i1}, v];
 SetAttributes[KrullDimensionM2, {Protected, ReadProtected}];
 
 
 Options[MapKernelM2] = {Extension -> {}, "Degrees" -> {{}}, "ParameterIdeal" -> {}};
-MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]..], v : _, 
+MapKernelM2[map : KeyValuePattern[{}], i1 : (List|And)[Except[_List]...], v : _, 
     OptionsPattern[MapKernelM2] ] :=
   Module[{idealA, vX, varsX, params, nums, ambRCmd, pRingCmd, aRingCmd, vM, varsM, 
       bRingCmd, cmds, res, rules},
@@ -365,12 +365,12 @@ SetAttributes[MinimalPresentationM2, {Protected, ReadProtected}];
 
 Options[VersalDeformationsM2] = {Extension -> {}, "Degrees" -> {{}}};
 VersalDeformationsM2[
-    i1 : (List|And)[Except[_List]..], v : _,
+    i1 : (List|And)[Except[_List]...], v : _,
     deg_Integer?NonNegative, 
     opts : OptionsPattern[VersalDeformationsM2] ] := 
   VersalDeformationsM2[i1, v, {deg, deg}, opts];
 VersalDeformationsM2[
-    i1 : (List|And)[Except[_List]..], v : _,
+    i1 : (List|And)[Except[_List]...], v : _,
     {dm_Integer, dM_Integer} /; (dm <= dM), 
     OptionsPattern[VersalDeformationsM2] ] :=
   Module[{ideal, vars, params, nums, rules, ambRCmd, ringCmd, idealCmd, preCmd, output,
