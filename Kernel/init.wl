@@ -1,17 +1,18 @@
+(* ::Package:: *)
 
 $m2path = Automatic;
 
 InterfaceM2::mdosm2 = "Missing both Macaulay2 and WSL (Windows Subsystem for Linux). \
-Please check https://aka.ms/wslinstall on how to setup WSL.";
+Please check https://aka.ms/wslinstall on how to setup WSL. Alternatively, define $M2Path.";
 InterfaceM2::mwslm2 = "Missing Macaulay2 on your default WSL distro. \
 Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
-on how to setup M2 on your desired distro.";
+on how to setup M2 on your desired distro. Alternatively define $M2Path.";
 InterfaceM2::munixm2 = "Missing Macaulay2 binary. \
 Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
-on how to setup M2 on your desired distro.";
+on how to setup M2 on your desired distro. Alternatively, define $M2Path.";
 InterfaceM2::m2fld = "Missing Macaulay2 binary. \
 Please check http://www2.macaulay2.com/Macaulay2/Downloads/GNU-Linux \
-on how to setup M2 on your desired distro.";
+on how to setup M2 on your desired distro. Alternatively, define $M2Path.";
 
 loadInterfaceM2[] := 
   Module[{cmdCheck, windowsCheck, unixCheck, fixPath},
@@ -49,9 +50,13 @@ loadInterfaceM2[] :=
     ];
     fixPath[] := Module[{},
       SetEnvironment["PATH" -> StringRiffle[Join[{
+            If[ValuesQ[$M2Path] && MatchQ[$M2Path, _?DirectoryQ|{__?DirectoryQ}],
+              Splice@Flatten@List[$M2Path], Nothing
+            ],
             "/opt/homebrew/bin",
             "/opt/homebrew/sbin",
-            "/usr/local/bin"},
+            "/usr/local/bin",
+            "/usr/local/opt/macaulay2/bin"},
           StringSplit[Environment["PATH"], ":"]
         ], ":"]
       ];
@@ -86,3 +91,6 @@ loadInterfaceM2[] :=
 loadInterfaceM2[];
 
 ClearAll[loadInterfaceM2, $m2path];
+
+
+
